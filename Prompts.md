@@ -247,3 +247,224 @@ The app should now work perfectly with your i5-12500H + RTX 3050 setup! The brig
 **Note**: If you still get password prompts occasionally, that's normal for hardware brightness control. The installation script tries to minimize this, but some systems still require it for security.
 
 Made changes.
+
+===============================================================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+I'll first create a short plan and mark the inspection step in-progress. Then I'll read the repository's key files (install.sh, README.md, brightness_controller.py) to find what the installer did so I can produce exact uninstall steps. Expected outcome: determine installed files, services, autostart entries, and give safe, complete uninstall + reinstall steps. 
+
+Created 3 todos
+
+Now I'll read the main files to determine what the installer did: install.sh, brightness_controller.py, and README.md. I'll fetch large ranges from each file. 
+
+Read [](file:///home/apostrophe/Downloads/Owmegle-linux/install.sh)
+
+Read [](file:///home/apostrophe/Downloads/Owmegle-linux/brightness_controller.py)
+
+Read [](file:///home/apostrophe/Downloads/Owmegle-linux/README.md)
+
+Starting (2/3) *Prepare complete uninstall steps*
+
+Starting (3/3) *Provide clean reinstall instructions*
+
+I'll mark the remaining todo as completed and finalize the todo list status. Then I'll give the uninstall + reinstall steps and safe commands to run. 
+
+Completed (3/3) *Provide clean reinstall instructions*
+
+I'll inspect what the installer placed and then give you a safe, complete uninstall + clean reinstall procedure (commands you can run). Below is what I found and exact, minimal steps to fully remove the app and reinstall it cleanly.
+
+## What the installer does (from install.sh and README)
+- Makes brightness_controller.py executable.
+- Creates a desktop entry at `~/.local/share/applications/brightness-controller.desktop` pointing to brightness_controller.py.
+- Adds a udev rules file at `/etc/udev/rules.d/90-brightness.rules` to change group and permissions on backlight brightness files.
+- Adds your user to the `video` group (via `sudo usermod -a -G video $USER`) — group membership takes effect after you log out and back in.
+- Installs packages: `python3-gi`, `python3-gi-cairo`, `gir1.2-gtk-3.0`, and `brightnessctl` (optional).
+- Runs `update-desktop-database ~/.local/share/applications/`.
+
+Because you see the screen set to 100% and the UI isn't visible, we'll remove the app files, the desktop entry, the udev rule, and optionally reverse the group change, then reinstall.
+
+## Safety note
+- Removing the udev rule and desktop entry is safe.
+- Removing your user from the `video` group is optional — it only affects permissions to hardware backlight; you probably want to stay in `video` after reinstall, but if you prefer a "clean" state I include removal steps.
+- The script does not install systemd services or daemons; no systemd cleanup is required.
+
+## Complete uninstall steps (copy-paste ready)
+Run these commands in a terminal. I show them as separate steps so you can inspect each one before running.
+
+1) Remove the desktop entry
+```bash
+rm -f ~/.local/share/applications/brightness-controller.desktop
+update-desktop-database ~/.local/share/applications/ || true
+```
+
+2) Remove the udev rule installed by the installer
+```bash
+# Remove the udev rule the installer created (requires sudo)
+sudo rm -f /etc/udev/rules.d/90-brightness.rules
+# Reload udev rules
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
+3) (Optional) Remove the app folder (only if you want to remove the source files)
+```bash
+# Be careful: this deletes the repository folder permanently
+rm -rf /home/apostrophe/Downloads/Owmegle-linux
+```
+If you want to keep the repo (so you can reinstall from it), skip the last command.
+
+4) (Optional) Reverse group membership (only if you want to remove your user from the video group)
+- Check current groups:
+```bash
+groups
+```
+- If you are in the `video` group and want to remove yourself:
+```bash
+# Replace `apostrophe` with your username if different
+sudo gpasswd -d $USER video
+```
+Note: You must log out and log back in (or reboot) for group changes to take effect.
+
+5) Remove the executable bit if you kept the folder but want a "clean" state:
+```bash
+chmod -x /home/apostrophe/Downloads/Owmegle-linux/brightness_controller.py || true
+```
+
+6) Remove optional system package installed by installer (if you want to uninstall them)
+- The installer installed commonly-used packages. Only remove them if you really want to:
+```bash
+# Remove brightnessctl only (safer)
+sudo apt remove --purge -y brightnessctl
+# Or remove GTK python deps (not recommended if other apps use them)
+# sudo apt remove --purge -y python3-gi python3-gi-cairo gir1.2-gtk-3.0
+```
+
+## Reinstall cleanly
+If you removed the folder, first re-clone or re-download the project to the same path or a path you choose.
+
+Assuming you kept or restored Owmegle-linux, run the installer again (it will recreate the desktop entry, make script executable, add udev rule, and add you to video group):
+
+```bash
+cd /home/apostrophe/Downloads/Owmegle-linux
+bash install.sh
+```
+
+If you prefer to do the steps manually (safer, more explicit):
+
+1) Install packages
+```bash
+sudo apt update
+sudo apt install -y python3-gi python3-gi-cairo gir1.2-gtk-3.0 brightnessctl
+```
+
+2) Make the script executable
+```bash
+chmod +x /home/apostrophe/Downloads/Owmegle-linux/brightness_controller.py
+```
+
+3) Create desktop entry (if you want app menu icon)
+```bash
+mkdir -p ~/.local/share/applications
+cat > ~/.local/share/applications/brightness-controller.desktop <<'EOF'
+[Desktop Entry]
+Name=Brightness Controller
+Comment=Control screen brightness when default slider doesn't work
+Exec=/home/apostrophe/Downloads/Owmegle-linux/brightness_controller.py
+Icon=display-brightness
+Terminal=false
+Type=Application
+Categories=Utility;Settings;
+StartupNotify=true
+EOF
+update-desktop-database ~/.local/share/applications/ || true
+```
+
+4) Recreate the udev rule for permissions (optional — this is what reduces password prompts)
+```bash
+# Create the udev rule (requires sudo)
+sudo tee /etc/udev/rules.d/90-brightness.rules > /dev/null <<'EOF'
+# Allow users in video group to control backlight
+ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="*", RUN+="/bin/chgrp video /sys/class/backlight/%k/brightness"
+ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="*", RUN+="/bin/chmod g+w /sys/class/backlight/%k/brightness"
+EOF
+
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
+5) Make sure your user is in the video group (recommended)
+```bash
+sudo usermod -a -G video $USER
+# Then log out and log back in (or reboot) to apply group membership
+```
+
+## How to verify things after reinstall
+- Check the desktop entry exists:
+```bash
+ls -l ~/.local/share/applications/brightness-controller.desktop
+```
+- Check the udev rule exists:
+```bash
+ls -l /etc/udev/rules.d/90-brightness.rules
+```
+- Verify group membership (after re-login):
+```bash
+groups
+```
+- Test the app dependency check:
+```bash
+python3 /home/apostrophe/Downloads/Owmegle-linux/brightness_controller.py --check
+```
+- Run the app and test brightness (from terminal so you see errors):
+```bash
+python3 /home/apostrophe/Downloads/Owmegle-linux/brightness_controller.py
+```
+If the GUI doesn't show because brightness is currently at 100% (screen too bright), you can try lowering brightness quickly via software xrandr to make the UI visible:
+```bash
+# This dims the screen to 50% via xrandr (software-only)
+# It does not change hardware brightness and will revert on reboot or other changes.
+# Replace <DISPLAY> with your output name like eDP-1. If unsure, run `xrandr --listactivemonitors` first.
+xrandr --output "$(xrandr --listactivemonitors | awk 'NR==2{print $4}')" --brightness 0.5
+```
+
+If xrandr command fails (for Wayland sessions), try running the GUI on an X session or use the app's hardware methods once permissions are set.
+
+## Quick rollback (if something went wrong)
+- If you removed the udev rule and want it back, re-create it (see the udev block above).
+- If you removed the repo directory by mistake, restore it from your original download or re-download the project.
+
+## Summary / Requirements coverage
+- Uninstall desktop entry: Done (commands above).
+- Remove udev rule: Done.
+- Remove app files: Done (optional rm command shown).
+- Undo group addition: Optional command provided.
+- Clean reinstall steps: Provided (both automatic via install.sh and manual).
+- Verification commands: Provided.
+
+If you want, I can:
+- Run the uninstall commands here (I won't run anything without your permission).
+- Reinstall and run the `--check` output, then show the results.
+Tell me if you want me to run the uninstall now (I will execute the commands), or if you prefer to run them yourself and share any error output.
