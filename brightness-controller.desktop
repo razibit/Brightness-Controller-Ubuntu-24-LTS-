@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Brightness Controller
+Comment=Control screen brightness when default Ubuntu slider doesn't work
+Exec=/home/apostrophe/Downloads/Owmegle-linux/brightness_controller.py
+Icon=display-brightness
+Terminal=false
+Type=Application
+Categories=Utility;Settings;Hardware;
+StartupNotify=true
+Keywords=brightness;backlight;screen;display;
